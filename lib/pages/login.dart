@@ -60,26 +60,16 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  // lib/pages/login.dart
+
   Future<void> _login() async {
     final email = emailController.text.trim();
     final password = passwordController.text.trim();
-
     if (email.isEmpty || password.isEmpty) {
-      Get.snackbar("Error", "Please enter Email & Password",
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.red.shade100);
+      Get.snackbar("Error", "Please enter Email & Password");
       return;
     }
-
-    await loginCtrl.login(email, password);
-
-    if (loginCtrl.isLoading.isFalse) {
-      SharedPreferences prefs = await SharedPreferences.getInstance();
-      bool? loggedIn = prefs.getBool("isLoggedIn");
-      if (loggedIn == true) {
-        Get.offAll(() => HomePage());
-      }
-    }
+    await loginCtrl.login(email, password); // ✅ Navigation handled inside
   }
 
   @override

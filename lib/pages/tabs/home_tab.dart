@@ -1,3 +1,5 @@
+// lib/pages/home_tab.dart
+
 import 'dart:math' as math;
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter/material.dart';
@@ -6,8 +8,8 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:get/get.dart';
 import 'package:sizer/sizer.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:new_suvarnraj_group/controller/cart_controller.dart';
 import 'package:new_suvarnraj_group/controller/home_page_controller.dart';
+import 'package:new_suvarnraj_group/widgets/service_card.dart';
 
 class HomeTab extends StatelessWidget {
   HomeTab({super.key});
@@ -33,27 +35,12 @@ class HomeTab extends StatelessWidget {
     },
   ];
 
-  final List<Map<String, dynamic>> services = const [
-    {"title": "Hall Deep Cleaning", "price": 1650, "image": "assets/images/one_img.webp"},
-    {"title": "Kitchen Cleaning", "price": 1750, "image": "assets/images/two_img.webp"},
-    {"title": "Bedroom Cleaning", "price": 1350, "image": "assets/images/three_img.webp"},
-    {"title": "Bathroom Cleaning", "price": 699, "image": "assets/images/four_img.webp"},
-    {"title": "Furniture Cleaning", "price": 1200, "image": "assets/images/five_img.webp"},
-    {"title": "Balcony Cleaning", "price": 450, "image": "assets/images/six_img.webp"},
-    {"title": "Upholstery Cleaning", "price": 250, "image": "assets/images/seven_img.webp"},
-    {"title": "Ceiling & Wall Cleaning", "price": 3000, "image": "assets/images/eight_img.webp"},
-    {"title": "Floor Cleaning", "price": "4 per sq.ft.", "image": "assets/images/nine_img.webp"},
-    {"title": "Carpet Cleaning", "price": "6 per sq.ft.", "image": "assets/images/ten_img.webp"},
-  ];
-
   @override
   Widget build(BuildContext context) {
     final homeController = Get.find<HomePageController>();
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
-    final bool isTablet = screenWidth >= 600;
 
-    // Dynamic grid layout tuned to width so items get sufficient height.
     int crossAxisCount;
     double childAspectRatio;
     if (screenWidth >= 1200) {
@@ -67,345 +54,539 @@ class HomeTab extends StatelessWidget {
       childAspectRatio = 0.9;
     } else {
       crossAxisCount = 2;
-      childAspectRatio = 0.70; // taller tiles on phones so button fits
+      childAspectRatio = 0.70;
     }
-
-    // Carousel height responsive to device height
-    final double carouselHeight = math.max(screenHeight * (isTablet ? 0.18 : 0.22), 140);
 
     return SafeArea(
       child: Stack(
         children: [
           Obx(() {
+            if (homeController.isLoading.value) {
+              return _buildLoadingState();
+            }
+
+            if (homeController.errorMsg.value.isNotEmpty) {
+              return _buildErrorState(homeController);
+            }
+
+            final allServicesFromAPI = homeController.allServices;
             final query = homeController.searchQuery.value.toLowerCase();
             final filteredServices = query.isEmpty
-                ? services
-                : services
-                .where((s) => s["title"].toString().toLowerCase().contains(query))
-                .toList();
+                ? allServicesFromAPI
+                : allServicesFromAPI.where((s) {
+              final title = s["title"]?.toString().toLowerCase() ?? "";
+              return title.contains(query);
+            }).toList();
 
-            return ListView(
-              padding: EdgeInsets.fromLTRB(3.w, 3.w, 3.w, 14.h), // leave room for FABs & nav
-              children: [
-                // Ads carousel - use LayoutBuilder inside each item so children scale to the exact carousel height
-                // inside ListView children:
-                CarouselSlider(
-                  options: CarouselOptions(
-                    height: math.max(screenHeight * 0.25, 160), // taller than before
-                    autoPlay: true,
-                    enlargeCenterPage: true,
-                    viewportFraction: 0.9,
+            return RefreshIndicator(
+              onRefresh: () => homeController.refreshHomeData(),
+              color: Colors.blue,
+              child: ListView(
+                padding: EdgeInsets.fromLTRB(3.w, 3.w, 3.w, 14.h),
+                children: [
+                  _buildPromotionalCarousel(screenHeight),
+                  SizedBox(height: 3.h),
+                  _buildSectionHeader(),
+                  SizedBox(height: 2.5.h),
+                  _buildServicesHeader(filteredServices.length),
+                  SizedBox(height: 1.5.h),
+                  filteredServices.isEmpty
+                      ? _buildEmptyState(query, homeController)
+                      : _buildServicesGrid(
+                    filteredServices,
+                    crossAxisCount,
+                    childAspectRatio,
                   ),
-                  items: ads.map((ad) {
-                    return Container(
-                      margin: EdgeInsets.symmetric(horizontal: 2.w),
-                      decoration: BoxDecoration(
-                        color: ad["color"],
-                        borderRadius: BorderRadius.circular(4.w),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
-                            blurRadius: 10,
-                            spreadRadius: 1,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(4.w),
-                        child: LayoutBuilder(builder: (context, constraints) {
-                          final h = constraints.maxHeight;
-                          return Row(
-                            children: [
-                              // Left text area
-                              Expanded(
-                                flex: 5,
-                                child: Padding(
-                                  padding: EdgeInsets.all(3.w),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Flexible(
-                                        child: FittedBox(
-                                          fit: BoxFit.scaleDown,
-                                          alignment: Alignment.centerLeft,
-                                          child: Text(
-                                            ad["title"],
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 18.sp,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                            maxLines: 3,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                      ),
-                                      Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Container(
-                                            padding: EdgeInsets.symmetric(
-                                                horizontal: 3.w, vertical: 0.7.h),
-                                            decoration: BoxDecoration(
-                                              color: Colors.white,
-                                              borderRadius: BorderRadius.circular(1.w),
-                                            ),
-                                            child: Text(
-                                              ad["code"],
-                                              style: TextStyle(
-                                                color: ad["color"],
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 12.sp,
-                                              ),
-                                            ),
-                                          ),
-                                          SizedBox(width: 3.w),
-                                          InkWell(
-                                            onTap: () {
-                                              Clipboard.setData(
-                                                  ClipboardData(text: ad["code"]));
-                                              Get.snackbar(
-                                                "Copied",
-                                                "${ad["code"]} copied!",
-                                                snackPosition: SnackPosition.BOTTOM,
-                                                backgroundColor: Colors.black87,
-                                                colorText: Colors.white,
-                                              );
-                                            },
-                                            child: Icon(Icons.copy,
-                                                color: Colors.white, size: 14.sp),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              // Right image area fills full height
-                              Expanded(
-                                flex: 4,
-                                child: SizedBox(
-                                  height: h,
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.only(
-                                      topRight: Radius.circular(4.w),
-                                      bottomRight: Radius.circular(4.w),
-                                    ),
-                                    child: Image.asset(
-                                      ad["image"],
-                                      fit: BoxFit.cover,
-                                      width: double.infinity,
-                                      height: double.infinity,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          );
-                        }),
-                      ),
-                    );
-                  }).toList(),
-                ),
-
-                SizedBox(height: 2.h),
-
-                // Header
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    RichText(
-                      textAlign: TextAlign.center,
-                      text: TextSpan(
-                        children: [
-                          TextSpan(
-                            text: "RESIDENTIAL\n",
-                            style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.bold, color: Colors.black),
-                          ),
-                          TextSpan(
-                            text: "CLEANING\n",
-                            style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.bold, color: Colors.blue),
-                          ),
-                          TextSpan(
-                            text: "SERVICES",
-                            style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.bold, color: Colors.black),
-                          ),
-                        ],
-                      ),
-                    ),
-                    SizedBox(height: 1.h),
-                    Container(height: 0.5.h, width: 20.w, color: Colors.red),
-                  ],
-                ),
-
-                SizedBox(height: 2.h),
-
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text("Our Services", style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.bold)),
-                ),
-                SizedBox(height: 1.h),
-
-                // Grid of services. childAspectRatio chosen above so cards have enough height for button.
-                GridView.builder(
-                  itemCount: filteredServices.length,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  padding: EdgeInsets.zero,
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: crossAxisCount,
-                    crossAxisSpacing: 3.w,
-                    mainAxisSpacing: 3.w,
-                    childAspectRatio: childAspectRatio,
-                  ),
-                  itemBuilder: (context, index) {
-                    final service = filteredServices[index];
-                    return ServiceCard(
-                      title: service["title"],
-                      price: service["price"],
-                      image: service["image"],
-                    );
-                  },
-                ),
-              ],
+                ],
+              ),
             );
           }),
+          _buildFloatingButtons(),
+        ],
+      ),
+    );
+  }
 
-          // Floating buttons (WhatsApp / Chat)
-          Positioned(
-            bottom: 6.h,
-            right: 4.w,
-            child: Column(
-              children: [
-                _GradientFab(
-                  heroTag: "whatsapp",
-                  icon: FontAwesomeIcons.whatsapp,
-                  colors: const [Color(0xFF25D366), Color(0xFF128C7E)],
-                  onTap: () async {
-                    const phoneNumber = "9763954728";
-                    const message = "Hi! I'm interested in your cleaning services.";
-                    final whatsappUri = Uri.parse("https://wa.me/$phoneNumber?text=${Uri.encodeComponent(message)}");
-                    try {
-                      await launchUrl(whatsappUri, mode: LaunchMode.externalApplication);
-                    } catch (_) {
-                      Get.snackbar("Error", "Could not open WhatsApp", backgroundColor: Colors.red, colorText: Colors.white);
-                    }
-                  },
-                ),
-                SizedBox(height: 2.h),
-                _GradientFab(
-                  heroTag: "chat",
-                  icon: Icons.chat,
-                  colors: const [Color(0xFFFF416C), Color(0xFFFF4B2B)],
-                  onTap: () async {
-                    const phoneNumber = "9763954728";
-                    const message = "Hi! I'm interested in your cleaning services.";
-                    final smsUri = Uri(scheme: 'sms', path: phoneNumber, queryParameters: {'body': message});
-                    final telUri = Uri(scheme: 'tel', path: phoneNumber);
-                    try {
-                      await launchUrl(smsUri, mode: LaunchMode.externalApplication);
-                    } catch (_) {
-                      try {
-                        await launchUrl(telUri, mode: LaunchMode.externalApplication);
-                      } catch (e) {
-                        Get.snackbar("Error", "Could not open messaging app", backgroundColor: Colors.red, colorText: Colors.white);
-                      }
-                    }
-                  },
-                ),
-              ],
+  Widget _buildLoadingState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          CircularProgressIndicator(
+            strokeWidth: 3,
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+          ),
+          SizedBox(height: 2.h),
+          Text(
+            "Loading services...",
+            style: TextStyle(
+              fontSize: 14.sp,
+              color: Colors.grey[600],
+              fontWeight: FontWeight.w500,
             ),
           ),
         ],
       ),
     );
   }
-}
 
-class ServiceCard extends StatelessWidget {
-  final String title;
-  final dynamic price;
-  final String image;
-
-  const ServiceCard({
-    super.key,
-    required this.title,
-    required this.price,
-    required this.image,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final priceStr = price is num ? price.toStringAsFixed(0) : price.toString();
-    final screenWidth = MediaQuery.of(context).size.width;
-    final bool isTablet = screenWidth >= 600;
-
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(2.w),
-        color: Colors.white,
-        boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.08), spreadRadius: 1, blurRadius: 6, offset: const Offset(0, 3))],
-      ),
-      clipBehavior: Clip.hardEdge,
-      child: Column(
-        mainAxisSize: MainAxisSize.max,
-        children: [
-          // Image expands and consumes available space so other widgets don't push the layout
-          Expanded(
-            flex: 6,
-            child: ClipRRect(
-              borderRadius: BorderRadius.only(topLeft: Radius.circular(2.w), topRight: Radius.circular(2.w)),
-              child: Image.asset(image, width: double.infinity, fit: BoxFit.cover),
+  Widget _buildErrorState(HomePageController controller) {
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.all(6.w),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.error_outline_rounded,
+              size: 70,
+              color: Colors.red[300],
             ),
-          ),
-
-          // Title
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 2.w, vertical: 1.w),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5.sp), maxLines: 2, overflow: TextOverflow.ellipsis),
+            SizedBox(height: 2.h),
+            Text(
+              "Oops! Something went wrong",
+              style: TextStyle(
+                fontSize: 18.sp,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
             ),
-          ),
-
-          // Price
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 2.w),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text("₹ $priceStr", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red, fontSize: 14.sp)),
-            ),
-          ),
-
-          // Button (keeps fixed comfortable height)
-          Padding(
-            padding: EdgeInsets.all(2.w),
-            child: SizedBox(
-              width: double.infinity,
-              // use a reasonable minHeight so button doesn't become too small on tiny devices
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  final cartController = Get.find<CartController>();
-                  final homeController = Get.find<HomePageController>();
-                  cartController.addToCart({"title": title, "price": price, "image": image});
-                  homeController.changeTab(4);
-                },
-                icon: Icon(Icons.shopping_cart, size: 13.sp, color: Colors.white),
-                label: Text("Add to Cart", style: TextStyle(color: Colors.white, fontSize: 12.5.sp)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  padding: EdgeInsets.symmetric(vertical: isTablet ? 1.1.h : 0.95.h),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(40)),
-                  minimumSize: const Size.fromHeight(0),
+            SizedBox(height: 1.h),
+            Container(
+              padding: EdgeInsets.all(3.w),
+              decoration: BoxDecoration(
+                color: Colors.red[50],
+                borderRadius: BorderRadius.circular(2.w),
+              ),
+              child: Text(
+                controller.errorMsg.value,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13.sp,
+                  color: Colors.red[700],
                 ),
+              ),
+            ),
+            SizedBox(height: 3.h),
+            ElevatedButton.icon(
+              onPressed: () => controller.fetchHomeData(),
+              icon: Icon(Icons.refresh_rounded, size: 20.sp),
+              label: Text(
+                "Try Again",
+                style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.bold),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 1.8.h),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(3.w),
+                ),
+                elevation: 2,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPromotionalCarousel(double screenHeight) {
+    return CarouselSlider(
+      options: CarouselOptions(
+        height: math.max(screenHeight * 0.25, 160),
+        autoPlay: true,
+        autoPlayInterval: const Duration(seconds: 4),
+        autoPlayAnimationDuration: const Duration(milliseconds: 800),
+        autoPlayCurve: Curves.fastOutSlowIn,
+        enlargeCenterPage: true,
+        viewportFraction: 0.9,
+        pauseAutoPlayOnTouch: true,
+      ),
+      items: ads.map((ad) => _buildAdCard(ad)).toList(),
+    );
+  }
+
+  Widget _buildAdCard(Map<String, dynamic> ad) {
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: 2.w),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [ad["color"], ad["color"].withOpacity(0.8)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(4.w),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 12,
+            spreadRadius: 1,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(4.w),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return Row(
+              children: [
+                Expanded(
+                  flex: 5,
+                  child: Padding(
+                    padding: EdgeInsets.all(3.w),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            ad["title"],
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18.sp,
+                              fontWeight: FontWeight.bold,
+                              height: 1.2,
+                            ),
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        _buildCouponCode(ad),
+                      ],
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 4,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.only(
+                      topRight: Radius.circular(4.w),
+                      bottomRight: Radius.circular(4.w),
+                    ),
+                    child: Image.asset(
+                      ad["image"],
+                      height: constraints.maxHeight,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          color: Colors.white.withOpacity(0.1),
+                          child: Icon(
+                            Icons.image_not_supported_rounded,
+                            size: 40,
+                            color: Colors.white,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCouponCode(Map<String, dynamic> ad) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: 3.w,
+            vertical: 0.8.h,
+          ),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(1.5.w),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Text(
+            ad["code"],
+            style: TextStyle(
+              color: ad["color"],
+              fontWeight: FontWeight.bold,
+              fontSize: 12.sp,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ),
+        SizedBox(width: 3.w),
+        InkWell(
+          onTap: () {
+            Clipboard.setData(ClipboardData(text: ad["code"]));
+            Get.snackbar(
+              "✓ Copied!",
+              "${ad["code"]} copied to clipboard",
+              snackPosition: SnackPosition.BOTTOM,
+              backgroundColor: Colors.black87,
+              colorText: Colors.white,
+              duration: const Duration(seconds: 2),
+              margin: EdgeInsets.all(3.w),
+              borderRadius: 2.w,
+            );
+          },
+          child: Container(
+            padding: EdgeInsets.all(1.5.w),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.copy_rounded,
+              color: Colors.white,
+              size: 14.sp,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSectionHeader() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        RichText(
+          textAlign: TextAlign.center,
+          text: TextSpan(
+            children: [
+              TextSpan(
+                text: "RESIDENTIAL\n",
+                style: TextStyle(
+                  fontSize: 18.sp,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                  letterSpacing: 1,
+                ),
+              ),
+              TextSpan(
+                text: "CLEANING\n",
+                style: TextStyle(
+                  fontSize: 18.sp,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blue,
+                  letterSpacing: 1,
+                ),
+              ),
+              TextSpan(
+                text: "SERVICES",
+                style: TextStyle(
+                  fontSize: 18.sp,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                  letterSpacing: 1,
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(height: 1.h),
+        Container(
+          height: 0.5.h,
+          width: 20.w,
+          decoration: BoxDecoration(
+            color: Colors.red,
+            borderRadius: BorderRadius.circular(1.w),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildServicesHeader(int count) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 1.w),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            "Our Services",
+            style: TextStyle(
+              fontSize: 17.sp,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: 3.w,
+              vertical: 0.5.h,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.blue[50],
+              borderRadius: BorderRadius.circular(3.w),
+            ),
+            child: Text(
+              "$count Services",
+              style: TextStyle(
+                fontSize: 11.sp,
+                fontWeight: FontWeight.w600,
+                color: Colors.blue,
               ),
             ),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildEmptyState(String query, HomePageController controller) {
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.symmetric(vertical: 10.h),
+        child: Column(
+          children: [
+            Icon(
+              Icons.search_off_rounded,
+              size: 70,
+              color: Colors.grey[300],
+            ),
+            SizedBox(height: 2.h),
+            Text(
+              query.isEmpty
+                  ? "No services available"
+                  : "No results for \"$query\"",
+              style: TextStyle(
+                fontSize: 15.sp,
+                color: Colors.grey[600],
+                fontWeight: FontWeight.w500,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            if (query.isNotEmpty) ...[
+              SizedBox(height: 1.h),
+              TextButton(
+                onPressed: () => controller.updateSearch(""),
+                child: Text(
+                  "Clear search",
+                  style: TextStyle(fontSize: 13.sp),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 🔥 सुधारित: Product ID validation सह
+  Widget _buildServicesGrid(
+      List<Map<String, dynamic>> services,
+      int crossAxisCount,
+      double childAspectRatio,
+      ) {
+    return GridView.builder(
+      itemCount: services.length,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.zero,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: crossAxisCount,
+        crossAxisSpacing: 3.w,
+        mainAxisSpacing: 3.w,
+        childAspectRatio: childAspectRatio,
+      ),
+      itemBuilder: (context, index) {
+        final service = services[index];
+
+        // ✅ Validation: service मध्ये id आहे का?
+        if (service['id'] == null || service['id'] == 0) {
+          return Container(
+            alignment: Alignment.center,
+            child: Text(
+              "Invalid Service",
+              style: TextStyle(color: Colors.red, fontSize: 12.sp),
+            ),
+          );
+        }
+
+        return ServiceCard(
+          title: service["title"] ?? "Unknown Service",
+          price: service["price"] ?? 0,
+          comparePrice: service["compare_price"],
+          imageUrl: service["image_url"],
+          serviceData: service,
+        );
+      },
+    );
+  }
+
+  Widget _buildFloatingButtons() {
+    return Positioned(
+      bottom: 6.h,
+      right: 4.w,
+      child: Column(
+        children: [
+          _GradientFab(
+            heroTag: "whatsapp",
+            icon: FontAwesomeIcons.whatsapp,
+            colors: const [Color(0xFF25D366), Color(0xFF128C7E)],
+            onTap: _onWhatsAppTap,
+          ),
+          SizedBox(height: 2.h),
+          _GradientFab(
+            heroTag: "chat",
+            icon: Icons.chat_rounded,
+            colors: const [Color(0xFFFF416C), Color(0xFFFF4B2B)],
+            onTap: _onChatTap,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 🔥 सुधारित: WhatsApp URL मधून spaces काढले
+  Future<void> _onWhatsAppTap() async {
+    const phoneNumber = "919763954728"; // 👈 +91 प्रीफिक्स दिला
+    const message = "Hi! I'm interested in your cleaning services.";
+    final whatsappUri = Uri.parse(
+      "https://wa.me/$phoneNumber?text=${Uri.encodeComponent(message)}", // 👈 spaces काढले
+    );
+    try {
+      await launchUrl(whatsappUri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      Get.snackbar(
+        "Error",
+        "Could not open WhatsApp",
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
+
+  Future<void> _onChatTap() async {
+    const phoneNumber = "9763954728";
+    const message = "Hi! I'm interested in your cleaning services.";
+    final smsUri = Uri(
+      scheme: 'sms',
+      path: phoneNumber,
+      queryParameters: {'body': message},
+    );
+    final telUri = Uri(scheme: 'tel', path: phoneNumber);
+    try {
+      await launchUrl(smsUri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      try {
+        await launchUrl(telUri, mode: LaunchMode.externalApplication);
+      } catch (e) {
+        Get.snackbar(
+          "Error",
+          "Could not open messaging app",
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
+      }
+    }
   }
 }
 
@@ -415,15 +596,31 @@ class _GradientFab extends StatelessWidget {
   final List<Color> colors;
   final VoidCallback onTap;
 
-  const _GradientFab({super.key, required this.heroTag, required this.icon, required this.colors, required this.onTap});
+  const _GradientFab({
+    required this.heroTag,
+    required this.icon,
+    required this.colors,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: LinearGradient(colors: colors),
-        boxShadow: [BoxShadow(color: colors.first.withOpacity(0.5), blurRadius: 16, spreadRadius: 2, offset: const Offset(0, 8))],
+        gradient: LinearGradient(
+          colors: colors,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: colors.first.withOpacity(0.4),
+            blurRadius: 16,
+            spreadRadius: 2,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: FloatingActionButton(
         heroTag: heroTag,

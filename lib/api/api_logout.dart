@@ -1,34 +1,50 @@
+// lib/api/api_logout.dart - COMPLETE VERSION
+
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 class ApiLogout {
   static const String baseUrl = "https://portfolio2.lemmecode.in/api/v1";
+  static const Duration timeout = Duration(seconds: 15);
 
-  /// POST /logout
+  static void _log(String msg) {
+    if (kDebugMode) print('🚪 Logout API: $msg');
+  }
+
+  /// ✅ LOGOUT USER
   static Future<bool> logout(String token) async {
     try {
-      final url = Uri.parse("$baseUrl/logout");
-      print("Calling logout API: $url");
-      print("Using token: $token");
+      _log('Calling logout endpoint...');
 
-      final response = await http.post(
+      if (token.isEmpty) {
+        throw Exception('No token provided');
+      }
+
+      final url = Uri.parse('$baseUrl/logout');
+
+      final response = await http
+          .post(
         url,
         headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer $token",
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
         },
-      );
+      )
+          .timeout(timeout);
 
-      print("Logout response: ${response.statusCode} → ${response.body}");
+      _log('Status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
-        final body = jsonDecode(response.body);
-        return body["status"] == true;
+        final data = jsonDecode(response.body);
+        _log('✅ Logout successful');
+        return data['status'] == true;
       } else {
+        _log('❌ Logout failed: ${response.statusCode}');
         return false;
       }
     } catch (e) {
-      print("❌ Logout API error: $e");
+      _log('❌ Error: $e');
       return false;
     }
   }

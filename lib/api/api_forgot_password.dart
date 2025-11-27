@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-
 class ForgotPasswordApi {
   static const String baseUrl = "https://portfolio2.lemmecode.in/api/v1";
 
